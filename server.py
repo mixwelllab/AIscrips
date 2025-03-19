@@ -3,23 +3,24 @@ import asyncio
 import aiohttp
 import zeep
 import requests
+import os
 import base64
 
 app = FastAPI()
 
-# API-ключи и настройки
+# Загружаем переменные окружения (API-ключи хранятся в Render)
 ROSSKO_WSDL = "http://api.rossko.ru/service/v2.1/GetSearch?wsdl"
-ROSSKO_KEY1 = "6564d3bfa97ebd83a412b1a808e30155"
-ROSSKO_KEY2 = "710b787d8dd547ccc13e2e1ae8d145de"
+ROSSKO_KEY1 = os.getenv("ROSSKO_KEY1")
+ROSSKO_KEY2 = os.getenv("ROSSKO_KEY2")
 ROSSKO_DELIVERY_ID = "000000002"
 ROSSKO_ADDRESS_ID = 207262
 
-BERG_API_KEY = "be39c9fd98e5aec101ee50901511f67fe30d0d0c97c25d1ff5fe2bf4ca832b0b"
+BERG_API_KEY = os.getenv("BERG_API_KEY")
 BERG_URL = "https://api.berg.ru/ordering/get_stock.json"
 
 AUTOSOYUZ_API_HOST = "https://api.xn--80aep1aarf3h.xn--p1ai"
-AUTOSOYUZ_USERNAME = "m.belikov@vogueautocenter.ru"
-AUTOSOYUZ_PASSWORD = "Vogue123654"
+AUTOSOYUZ_USERNAME = os.getenv("AUTOSOYUZ_USERNAME")
+AUTOSOYUZ_PASSWORD = os.getenv("AUTOSOYUZ_PASSWORD")
 
 # Авторизация для Автосоюза
 auth_string = f"{AUTOSOYUZ_USERNAME}:{AUTOSOYUZ_PASSWORD}"
@@ -30,13 +31,18 @@ AUTOSOYUZ_HEADERS = {
     "Content-Type": "application/json"
 }
 
+# Клиент для Rossko API
 rossko_client = zeep.Client(wsdl=ROSSKO_WSDL)
 
 async def fetch_rossko(part_number):
+    """Получение данных о запчастях из Rossko API"""
     try:
         response = rossko_client.service.GetSearch(
-            KEY1=ROSSKO_KEY1, KEY2=ROSSKO_KEY2, text=part_number,
-            delivery_id=ROSSKO_DELIVERY_ID, address_id=ROSSKO_ADDRESS_ID
+            KEY1=ROSSKO_KEY1,
+            KEY2=ROSSKO_KEY2,
+            text=part_number,
+            delivery_id=ROSSKO_DELIVERY_ID,
+            address_id=ROSSKO_ADDRESS_ID
         )
         if not hasattr(response, "PartsList") or not response.PartsList:
             return []
@@ -48,6 +54,7 @@ async def fetch_rossko(part_number):
         return {"error": f"Ошибка Rossko: {e}"}
 
 async def fetch_berg(session, part_number):
+    """Получение данных из Berg API"""
     try:
         url = f"{BERG_URL}?items[0][resource_article]={part_number}&key={BERG_API_KEY}"
         async with session.get(url) as response:
@@ -56,6 +63,7 @@ async def fetch_berg(session, part_number):
         return {"error": f"Ошибка Berg: {e}"}
 
 async def fetch_autosoyuz(session, part_number):
+    """Получение данных из Автосоюз API"""
     try:
         url = f"{AUTOSOYUZ_API_HOST}/SearchService/GetBrands?article={part_number}"
         async with session.get(url, headers=AUTOSOYUZ_HEADERS) as response:
@@ -65,6 +73,7 @@ async def fetch_autosoyuz(session, part_number):
 
 @app.get("/get_parts_info")
 async def get_parts_info(part_number: str):
+    """Основной эндпоинт API, который запрашивает данные с 3 источников"""
     async with aiohttp.ClientSession() as session:
         rossko_task = fetch_rossko(part_number)
         berg_task = fetch_berg(session, part_number)
