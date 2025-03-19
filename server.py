@@ -8,6 +8,11 @@ import base64
 
 app = FastAPI()
 
+# ✅ Добавляем обработчик для главной страницы
+@app.get("/")
+def home():
+    return {"message": "API is running! Use /docs to test"}
+
 # Загружаем переменные окружения (API-ключи хранятся в Render)
 ROSSKO_WSDL = "http://api.rossko.ru/service/v2.1/GetSearch?wsdl"
 ROSSKO_KEY1 = os.getenv("ROSSKO_KEY1")
